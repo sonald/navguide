@@ -7,6 +7,8 @@
 #include <iostream>
 #include <random>
 
+#define USE_OPENGL 1
+
 using namespace std;
 
 typedef struct _Sprite Sprite;
@@ -14,6 +16,10 @@ typedef struct _Sprite Sprite;
 SDL_Window* window = NULL;
 SDL_Surface* surface = NULL;
 SDL_Surface* bg = NULL;
+
+SDL_Renderer* renderer = NULL;
+SDL_Texture* bg_tex = NULL;
+
 int bg_x = 0, bg_y = 0;
 std::random_device rd;
 std::uniform_int_distribution<int> dist(0, 800);
@@ -47,6 +53,7 @@ typedef enum {
 struct _Sprite {
     SDL_Rect bound; /// x,y used as postion, w,h used ad bound
     SDL_Surface* surface;
+    SDL_Texture* tex;
     const char* label;
     SDL_Rect traits[5];
     unsigned int update_time;
@@ -71,7 +78,6 @@ static void sprite_draw(Sprite* s)
     SDL_Rect r = {
         0, 0, s->bound.w, s->bound.h
     };
-    SDL_BlitSurface(s->surface, &r, surface, &s->bound);
 
     auto& x = s->traits;
     int i = 0;
@@ -84,10 +90,18 @@ static void sprite_draw(Sprite* s)
         //cerr << rects[i] << endl;
     }
 
+#ifdef USE_OPENGL
+    SDL_RenderCopy(renderer, s->tex, &r, &s->bound);
     if (i) {
-        //std::cerr << "draw " << i << " traits" << std::endl;
+        SDL_RenderFillRects(renderer, rects, i);
+    }
+
+#else
+    SDL_BlitSurface(s->surface, &r, surface, &s->bound);
+    if (i) {
         SDL_FillRects(surface, rects, i, SDL_MapRGBA(surface->format, 0x22, 0x22, 0x22, 0x20));
     }
+#endif
 
     memmove(&s->traits[1], &s->traits, sizeof(s->traits[0])*4);
     s->traits[0] = s->bound;
@@ -118,17 +132,23 @@ static void sprite_update(Sprite* s)
 Sprite* load_sprite(const char* file)
 {
     static SDL_Surface* surf = NULL;
+    static SDL_Texture* tex = NULL;
+
     Sprite* res = sprite_sp;
     memset(res, 0, sizeof *res);
     sprite_sp++;
 
     if (!surf) {
         surf = IMG_Load(file);
-        if (surf) {
+        if (!surf) {
             err_quit("load sprite failed\n");
         }
+#ifdef USE_OPENGL
+        tex = SDL_CreateTextureFromSurface(renderer, surf);
+#endif
     }
     res->surface = surf;
+    res->tex = tex;
 
     res->bound = (SDL_Rect) {
         dist(rd), dist(rd), res->surface->w, res->surface->h
@@ -171,7 +191,12 @@ static void update()
 static void draw()
 {
     SDL_Rect r = { bg_x, bg_y, surface->w, surface->h };
+#ifdef USE_OPENGL
+    //SDL_RenderClear(renderer);
+    SDL_RenderCopy(renderer, bg_tex, &r, NULL );
+#else
     SDL_BlitSurface(bg, &r, surface, NULL);
+#endif
 
     Sprite* s = &sprite_slab[0];
     while (s != sprite_sp) {
@@ -179,7 +204,11 @@ static void draw()
         s++;
     }
 
+#ifdef USE_OPENGL
+    SDL_RenderPresent( renderer );
+#else
     SDL_UpdateWindowSurface(window);
+#endif
 }
 
 static void spawn_sprites(int n)
@@ -200,6 +229,7 @@ int main(int argc, char *argv[])
 
     atexit(SDL_Quit);
 
+#ifndef USE_OPENGL
     if (!SDL_SetHint(SDL_HINT_RENDER_DRIVER, "software")) {
         err_warn("use software render failed: %s\n", SDL_GetError());
     }
@@ -207,9 +237,14 @@ int main(int argc, char *argv[])
     if (!SDL_SetHint(SDL_HINT_FRAMEBUFFER_ACCELERATION, 0)) {
         err_warn("disable 3d accel failed: %s\n", SDL_GetError());
     }
+#endif
 
     window = SDL_CreateWindow("navguide", 0, 0, 1366, 768,
+#ifdef USE_OPENGL 
+            SDL_WINDOW_FULLSCREEN_DESKTOP|SDL_WINDOW_MAXIMIZED|SDL_WINDOW_OPENGL);
+#else
             SDL_WINDOW_FULLSCREEN_DESKTOP|SDL_WINDOW_MAXIMIZED);
+#endif
     if (!window) {
         err_quit("%s\n", SDL_GetError());
     }
@@ -226,6 +261,17 @@ int main(int argc, char *argv[])
         }
     }
 
+#ifdef USE_OPENGL
+    renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
+    SDL_SetRenderDrawColor(renderer, 0xee, 0xee, 0x0, 0x80);
+    SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+#endif
+
+    surface = SDL_GetWindowSurface(window);
+    SDL_SetSurfaceBlendMode(surface, SDL_BLENDMODE_BLEND);
+    cerr << "window: " << surface->w << "," << surface->h << endl;
+    cerr << SDL_GetPixelFormatName(surface->format->format) << endl;
+
     if (!(IMG_Init(IMG_INIT_JPG|IMG_INIT_PNG))) {
         err_quit("png load init failed\n");
     }
@@ -235,12 +281,10 @@ int main(int argc, char *argv[])
     }
     SDL_SetSurfaceBlendMode(bg, SDL_BLENDMODE_NONE);
     cerr << "background: " << bg->w << "," << bg->h << endl;
-
-    surface = SDL_GetWindowSurface(window);
+#ifdef USE_OPENGL
+    bg_tex = SDL_CreateTextureFromSurface(renderer, bg);
+#endif
     
-    SDL_SetSurfaceBlendMode(surface, SDL_BLENDMODE_BLEND);
-    cerr << "window: " << surface->w << "," << surface->h << endl;
-    cerr << SDL_GetPixelFormatName(surface->format->format) << endl;
     spawn_sprites(NSPAWN);
     
     int quit = 0;
@@ -279,6 +323,13 @@ int main(int argc, char *argv[])
             refresh_time = SDL_GetTicks() + 500;
         }
     }
+
+#ifdef USE_OPENGL
+    SDL_DestroyRenderer(renderer);
+#else
+    SDL_FreeSurface(surface);
+#endif
+    SDL_FreeSurface(bg);
 
     SDL_DestroyWindow(window);
     return 0;
