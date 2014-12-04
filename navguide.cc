@@ -117,14 +117,18 @@ static void sprite_update(Sprite* s)
 
 Sprite* load_sprite(const char* file)
 {
+    static SDL_Surface* surf = NULL;
     Sprite* res = sprite_sp;
     memset(res, 0, sizeof *res);
     sprite_sp++;
 
-    res->surface = IMG_Load(file);
-    if (!res->surface) {
-        err_quit("load sprite failed\n");
+    if (!surf) {
+        surf = IMG_Load(file);
+        if (surf) {
+            err_quit("load sprite failed\n");
+        }
     }
+    res->surface = surf;
 
     res->bound = (SDL_Rect) {
         dist(rd), dist(rd), res->surface->w, res->surface->h
