@@ -111,6 +111,9 @@ static void sprite_draw(Sprite* s)
     s->traits[0] = s->bound;
 }
 
+#define MAX(a, b) ((a) > (b) ? (a) : (b))
+#define MIN(a, b) ((a) < (b) ? (a) : (b))
+
 static void sprite_update(Sprite* s)
 {
     if (SDL_TICKS_PASSED(SDL_GetTicks(), s->update_time)) {
@@ -129,8 +132,8 @@ static void sprite_update(Sprite* s)
             s->bound.x++; break;
     }
 
-    s->bound.x = min(max(s->bound.x, 0), screen_w);
-    s->bound.y = min(max(s->bound.y, 0), screen_h);
+    s->bound.x = MIN(MAX(s->bound.x, 0), screen_w);
+    s->bound.y = MIN(MAX(s->bound.y, 0), screen_h);
 }
 
 Sprite* load_sprite(const char* file)
@@ -190,15 +193,15 @@ static void update()
         SDL_GetMouseState(&x, &y);
         int w = screen_w, h = screen_h;
         if (x < 50) {
-            bg_x = max(bg_x-2, 0);
+            bg_x = MAX(bg_x-2, 0);
         } else if (x > w-50) {
-            bg_x = min(bg_x+2, bg->w - w);
+            bg_x = MIN(bg_x+2, bg->w - w);
         }
 
         if (y < 50) {
-            bg_y = max(bg_y-2, 0);
+            bg_y = MAX(bg_y-2, 0);
         } else if (y > h-50) {
-            bg_y = min(bg_y+2, bg->h - h);
+            bg_y = MIN(bg_y+2, bg->h - h);
         }
     }
 }
@@ -309,6 +312,7 @@ int main(int argc, char *argv[])
     
     spawn_sprites(NSPAWN);
     
+    refresh_time = SDL_GetTicks() + 500;
     int quit = 0;
     while (!quit) {
         current_time = SDL_GetTicks();
@@ -337,12 +341,13 @@ int main(int argc, char *argv[])
                 default: break;
             }
         }
-        SDL_Delay(30);
-        update();
+        //SDL_Delay(30);
 
         if (SDL_TICKS_PASSED(SDL_GetTicks(), refresh_time)) {
+            update();
             draw();
-            refresh_time = SDL_GetTicks() + 500;
+            //refresh_time = SDL_GetTicks() + 500;
+            refresh_time += 500;
         }
     }
 

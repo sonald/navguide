@@ -16,6 +16,12 @@ pkg_check_modules(SDL2 REQUIRED sdl2)
 pkg_check_modules(SDL2_IMG REQUIRED SDL2_image)
 
 option(USE_OPENGL "Enable OpengGL accel" OFF)
+option(USE_PG "profiling" OFF)
+
+if (USE_PG)
+    message("profiling")
+    add_definitions(-static -pg -g)
+endif()
 
 add_definitions(-std=c++1y ${SDL2_CFLAGS} ${SDL2_IMG_CFLAGS})
 
@@ -29,9 +35,13 @@ include_directories(${SDL2_IMG_INCLUDE_DIRS})
 
 set(SRCS navguide.cc)
 
+set(libs ${SDL2_LIBRARIES} ${GLIB2_LIBRARIES} ${SDL2_IMG_LIBRARIES})
+if (USE_PG)
+    set(libs ${libs} -pg)
+endif()
+
 add_executable(${target} ${SRCS})
-target_link_libraries(${target} ${SDL2_LIBRARIES} ${GLIB2_LIBRARIES}
-    ${SDL2_IMG_LIBRARIES})
+target_link_libraries(${target} ${libs})
 
 # install stage
 install(TARGETS ${target} RUNTIME DESTINATION bin)
