@@ -23,6 +23,11 @@ if (USE_PG)
     add_definitions(-static -pg -g)
 endif()
 
+if (USE_OPENGL)
+    message("use opengl")
+    add_definitions(-DUSE_OPENGL=1)
+endif()
+
 add_definitions(-std=c++1y ${SDL2_CFLAGS} ${SDL2_IMG_CFLAGS})
 
 # Find includes in corresponding build directories

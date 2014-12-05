@@ -209,8 +209,7 @@ static void draw()
     cerr << __func__ << ": " << SDL_GetTicks() << endl;
     SDL_Rect r = { bg_x, bg_y, screen_w, screen_h };
 #ifdef USE_OPENGL
-    //SDL_RenderClear(renderer);
-    SDL_RenderCopy(renderer, bg_tex, &r, NULL );
+    SDL_RenderCopy(renderer, bg_tex, &r, NULL);
 #else
     SDL_BlitSurface(bg, &r, surface, NULL);
 #endif
@@ -344,7 +343,6 @@ int main(int argc, char *argv[])
         if (SDL_TICKS_PASSED(SDL_GetTicks(), refresh_time)) {
             update();
             draw();
-            //refresh_time = SDL_GetTicks() + 500;
             refresh_time += 500;
         }
     }
