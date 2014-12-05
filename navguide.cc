@@ -7,7 +7,7 @@
 #include <iostream>
 #include <random>
 
-#define USE_OPENGL 1
+#define USE_OPENGL 0
 
 using namespace std;
 
@@ -20,6 +20,7 @@ SDL_Surface* bg = NULL;
 SDL_Renderer* renderer = NULL;
 SDL_Texture* bg_tex = NULL;
 
+int screen_w = 0, screen_h = 0;
 int bg_x = 0, bg_y = 0;
 std::random_device rd;
 std::uniform_int_distribution<int> dist(0, 800);
@@ -52,8 +53,11 @@ typedef enum {
 
 struct _Sprite {
     SDL_Rect bound; /// x,y used as postion, w,h used ad bound
-    SDL_Surface* surface;
+#ifdef USE_OPENGL
     SDL_Texture* tex;
+#else
+    SDL_Surface* surface;
+#endif
     const char* label;
     SDL_Rect traits[5];
     unsigned int update_time;
@@ -125,34 +129,45 @@ static void sprite_update(Sprite* s)
             s->bound.x++; break;
     }
 
-    s->bound.x = min(max(s->bound.x, 0), surface->w);
-    s->bound.y = min(max(s->bound.y, 0), surface->h);
+    s->bound.x = min(max(s->bound.x, 0), screen_w);
+    s->bound.y = min(max(s->bound.y, 0), screen_h);
 }
 
 Sprite* load_sprite(const char* file)
 {
     static SDL_Surface* surf = NULL;
     static SDL_Texture* tex = NULL;
+    static int tw = 0, th = 0;
 
     Sprite* res = sprite_sp;
     memset(res, 0, sizeof *res);
     sprite_sp++;
 
+#ifdef USE_OPENGL
+    if (!tex) {
+#else
     if (!surf) {
+#endif
         surf = IMG_Load(file);
         if (!surf) {
             err_quit("load sprite failed\n");
         }
+        tw = surf->w;
+        th = surf->h;
+
 #ifdef USE_OPENGL
         tex = SDL_CreateTextureFromSurface(renderer, surf);
+        SDL_FreeSurface(surf);
 #endif
     }
-    res->surface = surf;
-    res->tex = tex;
 
-    res->bound = (SDL_Rect) {
-        dist(rd), dist(rd), res->surface->w, res->surface->h
-    };
+#ifdef USE_OPENGL
+    res->tex = tex;
+#else
+    res->surface = surf;
+#endif
+
+    res->bound = (SDL_Rect) { dist(rd), dist(rd), tw, th };
     res->draw = sprite_draw;
     res->update = sprite_update;
     char l[64];
@@ -173,7 +188,7 @@ static void update()
     {
         int x, y;
         SDL_GetMouseState(&x, &y);
-        int w = surface->w, h = surface->h;
+        int w = screen_w, h = screen_h;
         if (x < 50) {
             bg_x = max(bg_x-2, 0);
         } else if (x > w-50) {
@@ -190,7 +205,7 @@ static void update()
 
 static void draw()
 {
-    SDL_Rect r = { bg_x, bg_y, surface->w, surface->h };
+    SDL_Rect r = { bg_x, bg_y, screen_w, screen_h };
 #ifdef USE_OPENGL
     //SDL_RenderClear(renderer);
     SDL_RenderCopy(renderer, bg_tex, &r, NULL );
@@ -249,6 +264,8 @@ int main(int argc, char *argv[])
         err_quit("%s\n", SDL_GetError());
     }
 
+    SDL_GetWindowSize(window, &screen_w, &screen_h);
+
     int n = SDL_GetNumDisplayModes(0);
     for (int i = 0; i < n; i++) {
         SDL_DisplayMode mode;
@@ -265,12 +282,15 @@ int main(int argc, char *argv[])
     renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
     SDL_SetRenderDrawColor(renderer, 0xee, 0xee, 0x0, 0x80);
     SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
-#endif
 
+#else
     surface = SDL_GetWindowSurface(window);
-    SDL_SetSurfaceBlendMode(surface, SDL_BLENDMODE_BLEND);
+    if (SDL_ISPIXELFORMAT_ALPHA(surface->format->format)) {
+        SDL_SetSurfaceBlendMode(surface, SDL_BLENDMODE_BLEND);
+    }
     cerr << "window: " << surface->w << "," << surface->h << endl;
     cerr << SDL_GetPixelFormatName(surface->format->format) << endl;
+#endif
 
     if (!(IMG_Init(IMG_INIT_JPG|IMG_INIT_PNG))) {
         err_quit("png load init failed\n");
@@ -283,6 +303,7 @@ int main(int argc, char *argv[])
     cerr << "background: " << bg->w << "," << bg->h << endl;
 #ifdef USE_OPENGL
     bg_tex = SDL_CreateTextureFromSurface(renderer, bg);
+    SDL_FreeSurface(bg);
 #endif
     
     spawn_sprites(NSPAWN);
@@ -328,8 +349,8 @@ int main(int argc, char *argv[])
     SDL_DestroyRenderer(renderer);
 #else
     SDL_FreeSurface(surface);
-#endif
     SDL_FreeSurface(bg);
+#endif
 
     SDL_DestroyWindow(window);
     return 0;
