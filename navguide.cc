@@ -70,7 +70,7 @@ struct _Sprite {
 #define MAX_SPRITES 4096
 #define NSPAWN 2000
 Sprite sprite_slab[MAX_SPRITES];
-Sprite* sprite_sp = &sprite_slab[0];
+int sprite_sp = 0;
 
 ostream& operator<<(ostream& os, const SDL_Rect& r)
 {
@@ -121,15 +121,16 @@ static void sprite_update(Sprite* s)
         s->update_time = SDL_GetTicks() + 5000;
     }
 
+    int step = 8;
     switch(s->dir) {
         case Up:
-            s->bound.y--; break;
+            s->bound.y -= step; break;
         case Down:
-            s->bound.y++; break;
+            s->bound.y += step; break;
         case Left:
-            s->bound.x--; break;
+            s->bound.x -= step; break;
         default: // right
-            s->bound.x++; break;
+            s->bound.x += step; break;
     }
 
     s->bound.x = MIN(MAX(s->bound.x, 0), screen_w);
@@ -142,9 +143,8 @@ Sprite* load_sprite(const char* file)
     static SDL_Texture* tex = NULL;
     static int tw = 0, th = 0;
 
-    Sprite* res = sprite_sp;
-    memset(res, 0, sizeof *res);
-    sprite_sp++;
+    Sprite* res = &sprite_slab[sprite_sp++];
+    //memset(res, 0, sizeof *res);
 
 #ifdef USE_OPENGL
     if (!tex) {
@@ -173,19 +173,17 @@ Sprite* load_sprite(const char* file)
     res->bound = (SDL_Rect) { dist(rd), dist(rd), tw, th };
     res->draw = sprite_draw;
     res->update = sprite_update;
-    char l[64];
-    std::snprintf(l, sizeof l - 1, "%s %lu", file, sprite_sp - &sprite_slab[0]);
-    res->label = strdup(l);
+    //char l[64];
+    //std::snprintf(l, sizeof l - 1, "%s %u", file, sprite_sp);
+    //res->label = strdup(l);
 
     return res;
 }
 
 static void update()
 {
-    Sprite* s = &sprite_slab[0];
-    while (s != sprite_sp) {
-        s->update(s);
-        s++;
+    for (int i = 0; i < sprite_sp; i++) {
+        sprite_slab[i].update(&sprite_slab[i]);
     }
 
     {
@@ -217,10 +215,8 @@ static void draw()
     SDL_BlitSurface(bg, &r, surface, NULL);
 #endif
 
-    Sprite* s = &sprite_slab[0];
-    while (s != sprite_sp) {
-        s->draw(s);
-        s++;
+    for (int i = 0; i < sprite_sp; i++) {
+        sprite_slab[i].draw(&sprite_slab[i]);
     }
 
 #ifdef USE_OPENGL
@@ -236,11 +232,13 @@ static void spawn_sprites(int n)
         load_sprite("sprite.png");
     }
 
-    std::cerr << "spawn sprites done" << std::endl;
+    std::cerr << "spawn sprites done" << sprite_sp << std::endl;
 }
 
 int main(int argc, char *argv[])
 {
+    memset(sprite_slab, 0, sizeof sprite_slab);
+
     if (SDL_Init(SDL_INIT_VIDEO) != 0) {
         err_quit("Unable to initialize SDL:  %s\n", SDL_GetError());
         return 1;
