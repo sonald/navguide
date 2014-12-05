@@ -7,7 +7,7 @@
 #include <iostream>
 #include <random>
 
-#define USE_OPENGL 0
+//#define USE_OPENGL 1
 
 using namespace std;
 
@@ -205,6 +205,7 @@ static void update()
 
 static void draw()
 {
+    cerr << __func__ << ": " << SDL_GetTicks() << endl;
     SDL_Rect r = { bg_x, bg_y, screen_w, screen_h };
 #ifdef USE_OPENGL
     //SDL_RenderClear(renderer);

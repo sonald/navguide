@@ -15,7 +15,7 @@ pkg_check_modules(GLIB2 REQUIRED glib-2.0)
 pkg_check_modules(SDL2 REQUIRED sdl2)
 pkg_check_modules(SDL2_IMG REQUIRED SDL2_image)
 
-option(L10N "Enable localization" ON)
+option(USE_OPENGL "Enable OpengGL accel" OFF)
 
 add_definitions(-std=c++1y ${SDL2_CFLAGS} ${SDL2_IMG_CFLAGS})
 
