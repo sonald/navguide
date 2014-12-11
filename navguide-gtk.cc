@@ -89,6 +89,11 @@ static void sprite_draw(Sprite* s, cairo_t* cr)
         0, 0, s->bound.w, s->bound.h
     };
 
+    cairo_set_operator(cr, CAIRO_OPERATOR_OVER);
+    cairo_set_source_surface(cr, s->surface, s->bound.x, s->bound.y);
+    cairo_rectangle(cr, s->bound.x, s->bound.y, s->bound.w, s->bound.h);
+    cairo_fill(cr);
+
     auto& x = s->traits;
     int i = 0;
     Rect rects[5];
@@ -97,21 +102,13 @@ static void sprite_draw(Sprite* s, cairo_t* cr)
         rects[i].w = rects[i].h = 10;
         rects[i].x = x[i].x + (x[i].w - 10)/2;
         rects[i].y = x[i].y + (x[i].h - 10)/2;
+        cairo_set_source_rgba(cr, 0x22, 0x22, 0x22, 0x20);
+        cairo_rectangle(cr, rects[i].x, rects[i].y, rects[i].w, rects[i].h);
+        cairo_fill(cr);
         //cerr << rects[i] << endl;
     }
 
-    cairo_save(cr);
-    cairo_translate(cr, s->bound.x, s->bound.y);
-    cairo_set_source_surface(cr, s->surface, 0, 0);
-    cairo_set_operator(cr, CAIRO_OPERATOR_OVER);
-    cairo_paint(cr);
-    cairo_restore(cr);
-
-    //if (i) {
-        //SDL_FillRects(surface, rects, i, SDL_MapRGBA(surface->format, 0x22, 0x22, 0x22, 0x20));
-    //}
-
-    //memmove(&s->traits[1], &s->traits, sizeof(s->traits[0])*4);
+    memmove(&s->traits[1], &s->traits, sizeof(s->traits[0])*4);
     s->traits[0] = s->bound;
 }
 
@@ -119,7 +116,7 @@ static void sprite_update(Sprite* s)
 {
     if (get_ticks() > s->update_time) {
         s->dir = (DIRECTION)dir_dist(rd);
-        s->update_time = get_ticks() + 5000;
+        s->update_time = get_ticks() + random() / 5000 + 1000;
     }
 
     int step = 8;
@@ -134,8 +131,8 @@ static void sprite_update(Sprite* s)
             s->bound.x += step; break;
     }
 
-    s->bound.x = MIN(MAX(s->bound.x, 0), screen_w);
-    s->bound.y = MIN(MAX(s->bound.y, 0), screen_h);
+    s->bound.x = min(max(s->bound.x, 0), screen_w);
+    s->bound.y = min(max(s->bound.y, 0), screen_h);
     s->bound.x = dist(rd);
     s->bound.y = dist(rd);
 }
@@ -227,9 +224,9 @@ static gboolean draw_callback(GtkWidget *widget, cairo_t *cr, gpointer data)
 
     Rect r = { bg_x, bg_y, screen_w, screen_h };
 
-    cairo_set_source_surface(cr, bg, bg_x, bg_y);
-    cairo_set_operator(cr, CAIRO_OPERATOR_SOURCE);
-    cairo_paint(cr);
+    //cairo_set_source_surface(cr, bg, bg_x, bg_y);
+    //cairo_set_operator(cr, CAIRO_OPERATOR_SOURCE);
+    //cairo_paint(cr);
 
     for (int i = 0; i < sprite_sp; i++) {
         sprite_slab[i].draw(&sprite_slab[i], cr);
