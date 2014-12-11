@@ -220,20 +220,29 @@ static gboolean on_timeout(gpointer data)
 
 static gboolean draw_callback(GtkWidget *widget, cairo_t *cr, gpointer data)
 {
-    cerr << __func__ << ": " << get_ticks() << ", w " << screen_w << endl;
+    cerr << __func__ << ": " << get_ticks() << endl;
 
     Rect r = { bg_x, bg_y, screen_w, screen_h };
 
-    cairo_set_operator(cr, CAIRO_OPERATOR_SOURCE);
-    cairo_set_source_surface(cr, bg, 0 - bg_x, 0 - bg_y);
-    cairo_rectangle(cr, 0, 0, screen_w, screen_h);
-    cairo_fill(cr);
-
-    cairo_push_group(cr);
-    for (int i = 0; i < sprite_sp; i++) {
-        sprite_slab[i].draw(&sprite_slab[i], cr);
+    static cairo_surface_t* tmp = NULL;
+    if (!tmp) {
+        tmp = cairo_image_surface_create(CAIRO_FORMAT_RGB24, screen_w, screen_h);
     }
-    cairo_pop_group_to_source(cr);
+
+    cairo_t* cr2 = cairo_create(tmp);
+
+    cairo_set_operator(cr2, CAIRO_OPERATOR_SOURCE);
+    cairo_set_source_surface(cr2, bg, 0 - bg_x, 0 - bg_y);
+    cairo_rectangle(cr2, 0, 0, screen_w, screen_h);
+    cairo_fill(cr2);
+
+    for (int i = 0; i < sprite_sp; i++) {
+        sprite_slab[i].draw(&sprite_slab[i], cr2);
+    }
+    cairo_surface_flush(tmp);
+    cairo_destroy(cr2);
+
+    cairo_set_source_surface(cr, tmp, 0, 0);
     cairo_set_operator(cr, CAIRO_OPERATOR_OVER);
     cairo_paint(cr);
 
