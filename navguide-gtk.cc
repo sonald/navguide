@@ -116,7 +116,7 @@ static void sprite_update(Sprite* s)
 {
     if (get_ticks() > s->update_time) {
         s->dir = (DIRECTION)dir_dist(rd);
-        s->update_time = get_ticks() + random() / 5000 + 1000;
+        s->update_time = get_ticks() + 5000;
     }
 
     int step = 8;
@@ -133,8 +133,6 @@ static void sprite_update(Sprite* s)
 
     s->bound.x = min(max(s->bound.x, 0), screen_w);
     s->bound.y = min(max(s->bound.y, 0), screen_h);
-    s->bound.x = dist(rd);
-    s->bound.y = dist(rd);
 }
 
 Sprite* load_sprite(const char* file)
@@ -198,11 +196,20 @@ static void spawn_sprites(int n)
     std::cerr << "spawn sprites done" << sprite_sp << std::endl;
 }
 
+static gboolean on_configure(GtkWidget* widget, GdkEvent* ev, gpointer data)
+{
+    GdkWindow* dw = gtk_widget_get_window(widget);
+    screen_w = gdk_window_get_width(dw);
+    screen_h = gdk_window_get_height(dw);
+    return FALSE;
+}
+
 static gboolean on_key_press(GtkWidget* widget, GdkEvent* ev, gpointer data)
 {
     if (ev->key.keyval == GDK_KEY_Escape) {
         gtk_main_quit();
     }
+    return FALSE;
 }
 
 static gboolean on_timeout(gpointer data)
@@ -252,23 +259,16 @@ int main(int argc, char *argv[])
             "signal::draw", (draw_callback), NULL,
             "signal::key-press-event", on_key_press, NULL,
             "signal::destroy", gtk_main_quit, NULL,
+            "signal::configure-event", on_configure, NULL,
             NULL);
 
     gtk_container_add(GTK_CONTAINER(top), window);
     
-    gtk_widget_realize(top);
-    gtk_widget_realize(window);
-
     gtk_widget_set_can_focus(window, TRUE);
-    gtk_widget_show_all(top);
     gtk_window_maximize(GTK_WINDOW(top));
+    gtk_widget_show_all(top);
 
     gdk_window_set_events(gtk_widget_get_window(window), GDK_ALL_EVENTS_MASK);
-    GdkWindow* dw = gtk_widget_get_window(top);
-    screen_w = gdk_window_get_width(dw);
-    screen_h = gdk_window_get_height(dw);
-    gtk_widget_set_size_request(window, screen_w, screen_h);
-
     get_ticks();
     g_timeout_add(500, on_timeout, NULL);
 
