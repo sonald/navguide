@@ -105,7 +105,6 @@ static void sprite_draw(Sprite* s, cairo_t* cr)
         cairo_set_source_rgba(cr, 0x22, 0x22, 0x22, 0x20);
         cairo_rectangle(cr, rects[i].x, rects[i].y, rects[i].w, rects[i].h);
         cairo_fill(cr);
-        //cerr << rects[i] << endl;
     }
 
     memmove(&s->traits[1], &s->traits, sizeof(s->traits[0])*4);
@@ -198,9 +197,9 @@ static void spawn_sprites(int n)
 
 static gboolean on_configure(GtkWidget* widget, GdkEvent* ev, gpointer data)
 {
-    GdkWindow* dw = gtk_widget_get_window(widget);
-    screen_w = gdk_window_get_width(dw);
-    screen_h = gdk_window_get_height(dw);
+    //GdkWindow* dw = gtk_widget_get_window(widget);
+    //screen_w = gdk_window_get_width(dw);
+    //screen_h = gdk_window_get_height(dw);
     return FALSE;
 }
 
@@ -221,7 +220,6 @@ static gboolean on_timeout(gpointer data)
 
 static gboolean draw_callback(GtkWidget *widget, cairo_t *cr, gpointer data)
 {
-    //static cairo_surface_t* tmp = cairo_image_surface_create(CAIRO_FORMAT_RGB24, screen_w, screen_h);
     cerr << __func__ << ": " << get_ticks() << ", w " << screen_w << endl;
 
     Rect r = { bg_x, bg_y, screen_w, screen_h };
@@ -236,9 +234,10 @@ static gboolean draw_callback(GtkWidget *widget, cairo_t *cr, gpointer data)
         sprite_slab[i].draw(&sprite_slab[i], cr);
     }
     cairo_pop_group_to_source(cr);
+    cairo_set_operator(cr, CAIRO_OPERATOR_OVER);
     cairo_paint(cr);
 
-    return FALSE;
+    return TRUE;
 }
 
 int main(int argc, char *argv[])
@@ -266,6 +265,11 @@ int main(int argc, char *argv[])
     gtk_widget_set_can_focus(window, TRUE);
     gtk_window_maximize(GTK_WINDOW(top));
     gtk_widget_show_all(top);
+
+    GdkScreen* scr = gtk_window_get_screen(GTK_WINDOW(top));
+    GdkRectangle r;
+    gdk_screen_get_monitor_workarea(scr, 0, &r);
+    screen_w = r.width, screen_h = r.height;
 
     gdk_window_set_events(gtk_widget_get_window(window), GDK_ALL_EVENTS_MASK);
     get_ticks();
