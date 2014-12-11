@@ -5,12 +5,21 @@
 #include <gdk/gdk.h>
 #include <string.h>
 
+
+#include <ft2build.h>
+#include FT_FREETYPE_H
+        
 #include <iostream>
 #include <random>
 
 using namespace std;
 
 typedef struct _Sprite Sprite;
+
+static FT_Library ft;
+static FT_Face face;
+static int point_size = 16;
+static void draw_text(const char* text, cairo_t* cr, int x, int y);
 
 cairo_surface_t* surface = NULL;
 cairo_surface_t* bg = NULL;
@@ -63,19 +72,22 @@ typedef struct {
 
 struct _Sprite {
     Rect bound; /// x,y used as postion, w,h used ad bound
-    const char* label;
+    char* label;
     Rect traits[5];
     unsigned int update_time;
     DIRECTION dir;
     cairo_surface_t* surface;
+    cairo_surface_t* label_surface;
 
     void (*draw)(Sprite*, cairo_t*);
     void (*update)(Sprite*);
 };
 
+#define LABEL_LEN 64
 #define MAX_SPRITES 4096
 #define NSPAWN 2000
 Sprite sprite_slab[MAX_SPRITES];
+char label_slab[MAX_SPRITES*LABEL_LEN];
 int sprite_sp = 0;
 
 ostream& operator<<(ostream& os, const Rect& r)
@@ -94,6 +106,10 @@ static void sprite_draw(Sprite* s, cairo_t* cr)
     cairo_rectangle(cr, s->bound.x, s->bound.y, s->bound.w, s->bound.h);
     cairo_fill(cr);
 
+    cairo_set_source_surface(cr, s->label_surface, s->bound.x+s->bound.w, s->bound.y);
+    cairo_paint(cr);
+
+    cairo_set_operator(cr, CAIRO_OPERATOR_OVER);
     auto& x = s->traits;
     int i = 0;
     Rect rects[5];
@@ -134,11 +150,66 @@ static void sprite_update(Sprite* s)
     s->bound.y = min(max(s->bound.y, 0), screen_h);
 }
 
+static void load_text(Sprite* s, const char* text)
+{
+    int atlas_w = 0, atlas_h = 0;
+    FT_GlyphSlot slot = face->glyph;
+    for (int i = 0, n = strlen(text); i < n; i++) {
+        if (FT_Load_Char(face, text[i], FT_LOAD_RENDER)) {
+            std::cerr << "load " << text[i] << " failed\n";
+            return;
+        }
+        auto& bm = slot->bitmap;
+
+        atlas_h = std::max(atlas_h, bm.rows + ((int)slot->advance.y >> 6));
+        atlas_w += (slot->advance.x >> 6);
+    }
+
+    int x = 0, y = atlas_h;
+    s->label_surface = cairo_image_surface_create(CAIRO_FORMAT_ARGB32, 
+            atlas_w, atlas_h);
+    //cerr << __func__ << " " << cairo_image_surface_get_width(s->label_surface) 
+        //<< ", " << cairo_image_surface_get_height(s->label_surface) << endl;
+
+    cairo_t* cr = cairo_create(s->label_surface);
+
+    for (int i = 0, n = strlen(text); i < n; i++) {
+        if (FT_Load_Char(face, text[i], FT_LOAD_RENDER)) {
+            std::cerr << "load " << text[i] << " failed\n";
+            return;
+        }
+
+        auto& bm = slot->bitmap;
+        //little-endian
+        unsigned char* buf = new unsigned char[bm.width*bm.rows*4];
+        for (int i = 0, n = bm.width*bm.rows; i < n; i++) {
+            buf[i*4] = bm.buffer[i] > 0 ? 0: 255;
+            buf[i*4+1] = buf[i*4+2] = buf[i*4];
+            buf[i*4+3] = 0x80;
+        }
+        
+        cairo_surface_t* surf = cairo_image_surface_create_for_data(buf,
+                CAIRO_FORMAT_ARGB32, bm.width, bm.rows, bm.width*4);
+        if (cairo_surface_status(surf) != CAIRO_STATUS_SUCCESS) {
+            cerr << "create glyph surface failed: " << cairo_status_to_string(cairo_surface_status(surf)) << endl;
+        }
+        cairo_set_source_surface(cr, surf, x + slot->bitmap_left, y - slot->bitmap_top );
+        cairo_paint(cr);
+        cairo_surface_destroy(surf);
+        delete buf;
+
+        x += (slot->advance.x >> 6);
+    }
+    cairo_destroy(cr);
+    cairo_surface_flush(s->label_surface);
+}
+
 Sprite* load_sprite(const char* file)
 {
     static int tw = 0, th = 0;
     static cairo_surface_t* surf = NULL;
 
+    char* label = &label_slab[sprite_sp*LABEL_LEN];
     Sprite* res = &sprite_slab[sprite_sp++];
 
     if (!surf) {
@@ -158,6 +229,9 @@ Sprite* load_sprite(const char* file)
     res->draw = sprite_draw;
     res->update = sprite_update;
     res->update_time = get_ticks();
+    res->label = label;
+    snprintf(label, LABEL_LEN-1, "monkey #%d", sprite_sp);
+    load_text(res, res->label);
 
     return res;
 }
@@ -249,11 +323,66 @@ static gboolean draw_callback(GtkWidget *widget, cairo_t *cr, gpointer data)
     return TRUE;
 }
 
+static void draw_text(const char* text, cairo_t* cr, int x, int y)
+{
+    FT_GlyphSlot slot = face->glyph;
+    for (int i = 0, n = strlen(text); i < n; i++) {
+        if (FT_Load_Char(face, text[i], FT_LOAD_RENDER)) {
+            std::cerr << "load " << text[i] << " failed\n";
+            return;
+        }
+
+        auto& bm = slot->bitmap;
+        unsigned char* buf = new unsigned char[bm.width*bm.rows*4];
+        for (int i = 0, n = bm.width*bm.rows; i < n; i++) {
+            buf[i*4] = bm.buffer[i] > 0 ? 0: 255;
+            buf[i*4+1] = buf[i*4+2] = buf[i*4];
+            buf[i*4+3] = 0x80;
+        }
+        
+        cairo_surface_t* surf = cairo_image_surface_create_for_data(buf,
+                CAIRO_FORMAT_ARGB32, bm.width, bm.rows, bm.width*4);
+        if (cairo_surface_status(surf) != CAIRO_STATUS_SUCCESS) {
+            cerr << "create glyph surface failed: " << cairo_status_to_string(cairo_surface_status(surf)) << endl;
+        }
+        cairo_set_source_surface(cr, surf, x + slot->bitmap_left, y - slot->bitmap_top );
+        cairo_paint(cr);
+        cairo_surface_destroy(surf);
+        delete buf;
+
+        x += slot->advance.x >> 6;
+    }
+}
+
+static void init_ft()
+{
+    if (FT_Init_FreeType(&ft)) {
+        std::cerr << "init freetype failed" << std::endl;
+        exit(-1);
+    }
+
+    if (FT_New_Face(ft, "/usr/share/fonts/TTF/DejaVuSansMono.ttf", 0, &face)) {
+        std::cerr << "load face failed" << std::endl;
+        exit(-1);
+    }
+
+    FT_Set_Pixel_Sizes(face, 0, point_size);
+    //FT_ULong num = 128;
+
+    ////ASCII is loaded by default
+    //for (auto i = 32; i < num; i++) {
+        //load_char_helper(i);
+    //}
+}
+
 int main(int argc, char *argv[])
 {
     gtk_init(&argc, &argv);
 
+    init_ft();
+
     memset(sprite_slab, 0, sizeof sprite_slab);
+    memset(label_slab, 0, sizeof label_slab);
     spawn_sprites(NSPAWN);
     
     GdkPixbuf* pix = gdk_pixbuf_new_from_file("background.jpg", NULL);

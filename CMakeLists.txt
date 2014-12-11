@@ -15,6 +15,7 @@ pkg_check_modules(GLIB2 REQUIRED glib-2.0)
 pkg_check_modules(GTK3 REQUIRED gtk+-3.0)
 pkg_check_modules(GDK3 REQUIRED gdk-3.0)
 pkg_check_modules(SDL2 REQUIRED sdl2)
+pkg_check_modules(FT2 REQUIRED freetype2)
 pkg_check_modules(SDL2_IMG REQUIRED SDL2_image)
 
 option(USE_OPENGL "Enable OpengGL accel" OFF)
@@ -30,7 +31,7 @@ if (USE_OPENGL)
     add_definitions(-DUSE_OPENGL=1)
 endif()
 
-add_definitions(-std=c++1y ${SDL2_CFLAGS} ${SDL2_IMG_CFLAGS} ${GTK3_CFLAGS})
+add_definitions(-std=c++1y ${SDL2_CFLAGS} ${SDL2_IMG_CFLAGS} ${GTK3_CFLAGS} ${FT2_CFLAGS})
 
 # Find includes in corresponding build directories
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
@@ -40,6 +41,7 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR})
 include_directories(${SDL2_INCLUDE_DIRS})
 include_directories(${GTK3_INCLUDE_DIRS})
 include_directories(${GDK3_INCLUDE_DIRS})
+include_directories(${FT2_INCLUDE_DIRS})
 include_directories(${SDL2_IMG_INCLUDE_DIRS})
 
 set(SRCS navguide.cc)
@@ -53,7 +55,8 @@ add_executable(${target} ${SRCS})
 target_link_libraries(${target} ${libs})
 
 add_executable(navguide-gtk navguide-gtk.cc)
-target_link_libraries(navguide-gtk ${GLIB2_LIBRARIES} ${GTK3_LIBRARIES} ${GDK3_LIBRARIES})
+target_link_libraries(navguide-gtk ${GLIB2_LIBRARIES} ${GTK3_LIBRARIES} ${GDK3_LIBRARIES}
+    ${FT2_LIBRARIES})
 
 # install stage
 install(TARGETS ${target} RUNTIME DESTINATION bin)
