@@ -28,7 +28,7 @@ cairo_surface_t* bg = NULL;
 GtkWidget* window = NULL;
 
 int screen_w = 0, screen_h = 0;
-int bg_x = 0, bg_y = 0;
+int bg_x = 0, bg_y = 0, bg_w = 0, bg_h = 0;
 std::random_device rd;
 std::uniform_int_distribution<int> dist(10, 800);
 std::uniform_int_distribution<int> dir_dist(1, 4);
@@ -85,8 +85,8 @@ struct _Sprite {
     void (*update)(Sprite*);
 };
 
-#define LABEL_LEN 64
-#define MAX_SPRITES 4096
+#define LABEL_LEN 32
+#define MAX_SPRITES 3000
 #define NSPAWN 2000
 Sprite sprite_slab[MAX_SPRITES];
 char label_slab[MAX_SPRITES*LABEL_LEN];
@@ -151,6 +151,9 @@ static void sprite_update(Sprite* s)
     s->bound.y = min(max(s->bound.y, 0), screen_h);
 }
 
+static const int TEX_LEN = 200 * 15 * 4;
+static unsigned char tex_slab[NSPAWN*TEX_LEN]; // large enough for all surfaces
+
 static void load_text(Sprite* s, const char* text)
 {
     int atlas_w = 0, atlas_h = 0;
@@ -167,8 +170,10 @@ static void load_text(Sprite* s, const char* text)
     }
 
     int x = 0, y = atlas_h;
-    s->label_surface = cairo_image_surface_create(CAIRO_FORMAT_ARGB32, 
-            atlas_w, atlas_h);
+    unsigned char* label_buf = &tex_slab[TEX_LEN*sprite_sp];
+    s->label_surface = cairo_image_surface_create_for_data(label_buf,
+            CAIRO_FORMAT_ARGB32, atlas_w, atlas_h, atlas_w * 4);
+    //cerr << __func__ << "atlas " << atlas_w << "," << atlas_h << endl;
 
     cairo_t* cr = cairo_create(s->label_surface);
 
@@ -193,7 +198,6 @@ static void load_text(Sprite* s, const char* text)
             cerr << "create glyph surface failed: " << cairo_status_to_string(cairo_surface_status(surf)) << endl;
         }
         cairo_set_source_surface(cr, surf, x + slot->bitmap_left, y - slot->bitmap_top );
-        //cairo_paint(cr);
         cairo_set_operator(cr, CAIRO_OPERATOR_SOURCE);
         cairo_rectangle(cr, x + slot->bitmap_left, y - slot->bitmap_top, bm.width, bm.rows);
         cairo_fill(cr);
@@ -213,7 +217,7 @@ Sprite* load_sprite(const char* file)
     static cairo_surface_t* surf = NULL;
 
     char* label = &label_slab[sprite_sp*LABEL_LEN];
-    Sprite* res = &sprite_slab[sprite_sp++];
+    Sprite* res = &sprite_slab[sprite_sp];
 
     if (!surf) {
         GdkPixbuf* pix = gdk_pixbuf_new_from_file(file, NULL);
@@ -236,6 +240,7 @@ Sprite* load_sprite(const char* file)
     snprintf(label, LABEL_LEN-1, "monkey #%d", sprite_sp);
     load_text(res, res->label);
 
+    sprite_sp++;
     return res;
 }
 
@@ -246,21 +251,21 @@ static void update()
     }
 
     {
+        int step = 10;
         int x, y;
         gdk_device_get_position(mouse, NULL, &x, &y);
-        int bg_w = cairo_image_surface_get_width(bg), bg_h = cairo_image_surface_get_height(bg);
 
         int w = screen_w, h = screen_h;
         if (x < 100) {
-            bg_x = MAX(bg_x-2, 0);
-        } else if (x > w-50) {
-            bg_x = min(bg_x+2, bg_w - w);
+            bg_x = max(bg_x-step, 0);
+        } else if (x > w-100) {
+            bg_x = min(bg_x+step, bg_w - w);
         }
 
         if (y < 100) {
-            bg_y = max(bg_y-2, 0);
-        } else if (y > h-50) {
-            bg_y = min(bg_y+2, bg_h - h);
+            bg_y = max(bg_y-step, 0);
+        } else if (y > h-100) {
+            bg_y = min(bg_y+step, bg_h - h);
         }
     }
 }
@@ -371,6 +376,7 @@ static void load_background()
     GdkPixbuf* pix = gdk_pixbuf_new_from_file("background.jpg", NULL);
     bg = gdk_cairo_surface_create_from_pixbuf(pix, 0, NULL);
     g_object_unref(pix);
+    bg_w = cairo_image_surface_get_width(bg), bg_h = cairo_image_surface_get_height(bg);
     cerr << "bg: " << cairo_image_surface_get_width(bg) << ", " << cairo_image_surface_get_height(bg) 
         << "  alpha: " << (cairo_image_surface_get_format(bg) == CAIRO_FORMAT_ARGB32) << endl;
 }
@@ -410,6 +416,7 @@ int main(int argc, char *argv[])
 
     memset(sprite_slab, 0, sizeof sprite_slab);
     memset(label_slab, 0, sizeof label_slab);
+    //memset(tex_slab, 0, sizeof tex_slab);
     spawn_sprites(NSPAWN);
     
     window = gtk_drawing_area_new();
