@@ -279,9 +279,26 @@ static gboolean on_button_release(GtkWidget* widget, GdkEvent* ev, gpointer data
 
 static gboolean on_mouse_motion(GtkWidget* widget, GdkEvent* ev, gpointer data)
 {
-    if (drag) {
+    //if (drag) {
+        int step = 10;
+        int x, y;
+        x = ev->motion.x, y = ev->motion.y;
+        //gdk_device_get_position(mouse, NULL, &x, &y);
+
+        int w = screen_w, h = screen_h;
+        if (x < 100) {
+            bg_x = max(bg_x-step, 0);
+        } else if (x > w-100) {
+            bg_x = min(bg_x+step, bg_w - w);
+        }
+
+        if (y < 100) {
+            bg_y = max(bg_y-step, 0);
+        } else if (y > h-100) {
+            bg_y = min(bg_y+step, bg_h - h);
+        }
         
-    }
+    //}
     return FALSE;
 }
 
@@ -305,24 +322,24 @@ static gboolean on_timeout(gpointer data)
 {
     unsigned int cur = get_ticks();
     // this slow on Loongson, why?
-    {
-        int step = 10;
-        int x, y;
-        gdk_device_get_position(mouse, NULL, &x, &y);
+    //{
+        //int step = 10;
+        //int x, y;
+        //gdk_device_get_position(mouse, NULL, &x, &y);
 
-        int w = screen_w, h = screen_h;
-        if (x < 100) {
-            bg_x = max(bg_x-step, 0);
-        } else if (x > w-100) {
-            bg_x = min(bg_x+step, bg_w - w);
-        }
+        //int w = screen_w, h = screen_h;
+        //if (x < 100) {
+            //bg_x = max(bg_x-step, 0);
+        //} else if (x > w-100) {
+            //bg_x = min(bg_x+step, bg_w - w);
+        //}
 
-        if (y < 100) {
-            bg_y = max(bg_y-step, 0);
-        } else if (y > h-100) {
-            bg_y = min(bg_y+step, bg_h - h);
-        }
-    }
+        //if (y < 100) {
+            //bg_y = max(bg_y-step, 0);
+        //} else if (y > h-100) {
+            //bg_y = min(bg_y+step, bg_h - h);
+        //}
+    //}
     update();
     gtk_widget_queue_draw(window);
     auto ellapsed = get_ticks() - cur;
