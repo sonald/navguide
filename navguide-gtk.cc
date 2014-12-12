@@ -19,7 +19,6 @@ typedef struct _Sprite Sprite;
 static FT_Library ft;
 static FT_Face face;
 static int point_size = 16;
-static void draw_text(const char* text, cairo_t* cr, int x, int y);
 
 cairo_surface_t* surface = NULL;
 cairo_surface_t* bg = NULL;
@@ -109,7 +108,6 @@ static void sprite_draw(Sprite* s, cairo_t* cr)
     cairo_set_source_surface(cr, s->label_surface, s->bound.x+s->bound.w, s->bound.y);
     cairo_paint(cr);
 
-    cairo_set_operator(cr, CAIRO_OPERATOR_OVER);
     auto& x = s->traits;
     int i = 0;
     Rect rects[5];
@@ -183,9 +181,9 @@ static void load_text(Sprite* s, const char* text)
         //little-endian
         unsigned char* buf = new unsigned char[bm.width*bm.rows*4];
         for (int i = 0, n = bm.width*bm.rows; i < n; i++) {
-            buf[i*4] = bm.buffer[i] > 0 ? 0: 255;
+            buf[i*4] = 0;
             buf[i*4+1] = buf[i*4+2] = buf[i*4];
-            buf[i*4+3] = 0x80;
+            buf[i*4+3] = bm.buffer[i] > 0 ? 0xc0: 0;
         }
         
         cairo_surface_t* surf = cairo_image_surface_create_for_data(buf,
@@ -195,6 +193,10 @@ static void load_text(Sprite* s, const char* text)
         }
         cairo_set_source_surface(cr, surf, x + slot->bitmap_left, y - slot->bitmap_top );
         cairo_paint(cr);
+        //cairo_set_operator(cr, CAIRO_OPERATOR_SOURCE);
+        //cairo_rectangle(cr, x + slot->bitmap_left, y - slot->bitmap_top, bm.width, bm.rows);
+        //cairo_fill(cr);
+
         cairo_surface_destroy(surf);
         delete buf;
 
@@ -300,7 +302,7 @@ static gboolean draw_callback(GtkWidget *widget, cairo_t *cr, gpointer data)
 
     static cairo_surface_t* tmp = NULL;
     if (!tmp) {
-        tmp = cairo_image_surface_create(CAIRO_FORMAT_RGB24, screen_w, screen_h);
+        tmp = cairo_image_surface_create(CAIRO_FORMAT_ARGB32, screen_w, screen_h);
     }
 
     cairo_t* cr2 = cairo_create(tmp);
@@ -323,37 +325,6 @@ static gboolean draw_callback(GtkWidget *widget, cairo_t *cr, gpointer data)
     return TRUE;
 }
 
-static void draw_text(const char* text, cairo_t* cr, int x, int y)
-{
-    FT_GlyphSlot slot = face->glyph;
-    for (int i = 0, n = strlen(text); i < n; i++) {
-        if (FT_Load_Char(face, text[i], FT_LOAD_RENDER)) {
-            std::cerr << "load " << text[i] << " failed\n";
-            return;
-        }
-
-        auto& bm = slot->bitmap;
-        unsigned char* buf = new unsigned char[bm.width*bm.rows*4];
-        for (int i = 0, n = bm.width*bm.rows; i < n; i++) {
-            buf[i*4] = bm.buffer[i] > 0 ? 0: 255;
-            buf[i*4+1] = buf[i*4+2] = buf[i*4];
-            buf[i*4+3] = 0x80;
-        }
-        
-        cairo_surface_t* surf = cairo_image_surface_create_for_data(buf,
-                CAIRO_FORMAT_ARGB32, bm.width, bm.rows, bm.width*4);
-        if (cairo_surface_status(surf) != CAIRO_STATUS_SUCCESS) {
-            cerr << "create glyph surface failed: " << cairo_status_to_string(cairo_surface_status(surf)) << endl;
-        }
-        cairo_set_source_surface(cr, surf, x + slot->bitmap_left, y - slot->bitmap_top );
-        cairo_paint(cr);
-        cairo_surface_destroy(surf);
-        delete buf;
-
-        x += slot->advance.x >> 6;
-    }
-}
-
 static void init_ft()
 {
     if (FT_Init_FreeType(&ft)) {
@@ -367,29 +338,38 @@ static void init_ft()
     }
 
     FT_Set_Pixel_Sizes(face, 0, point_size);
-    //FT_ULong num = 128;
+}
 
-    ////ASCII is loaded by default
-    //for (auto i = 32; i < num; i++) {
-        //load_char_helper(i);
-    //}
+static void load_background()
+{
+    GdkPixbuf* pix = gdk_pixbuf_new_from_file("background.jpg", NULL);
+    bg = gdk_cairo_surface_create_from_pixbuf(pix, 0, NULL);
+    g_object_unref(pix);
+    cerr << "bg: " << cairo_image_surface_get_width(bg) << ", " << cairo_image_surface_get_height(bg) 
+        << "  alpha: " << (cairo_image_surface_get_format(bg) == CAIRO_FORMAT_ARGB32) << endl;
 }
 
 int main(int argc, char *argv[])
 {
     gtk_init(&argc, &argv);
 
+    GtkWidget* top = gtk_window_new(GTK_WINDOW_TOPLEVEL);
+    GdkScreen* scr = gtk_window_get_screen(GTK_WINDOW(top));
+    GdkRectangle r;
+    gdk_screen_get_monitor_workarea(scr, 0, &r);
+    screen_w = r.width, screen_h = r.height;
+
+    GdkVisual *visual = gdk_screen_get_rgba_visual (scr);
+    if (visual != NULL)
+        gtk_widget_set_visual(GTK_WIDGET(top), visual);
+
     init_ft();
+    load_background();
 
     memset(sprite_slab, 0, sizeof sprite_slab);
     memset(label_slab, 0, sizeof label_slab);
     spawn_sprites(NSPAWN);
     
-    GdkPixbuf* pix = gdk_pixbuf_new_from_file("background.jpg", NULL);
-    bg = gdk_cairo_surface_create_from_pixbuf(pix, 0, NULL);
-    cerr << "bg: " << cairo_image_surface_get_width(bg) << ", " << cairo_image_surface_get_height(bg) << endl;
-
-    GtkWidget* top = gtk_window_new(GTK_WINDOW_TOPLEVEL);
     window = gtk_drawing_area_new();
     g_object_connect(window,
             "signal::draw", (draw_callback), NULL,
@@ -403,11 +383,6 @@ int main(int argc, char *argv[])
     gtk_widget_set_can_focus(window, TRUE);
     gtk_window_maximize(GTK_WINDOW(top));
     gtk_widget_show_all(top);
-
-    GdkScreen* scr = gtk_window_get_screen(GTK_WINDOW(top));
-    GdkRectangle r;
-    gdk_screen_get_monitor_workarea(scr, 0, &r);
-    screen_w = r.width, screen_h = r.height;
 
     gdk_window_set_events(gtk_widget_get_window(window), GDK_ALL_EVENTS_MASK);
     get_ticks();
