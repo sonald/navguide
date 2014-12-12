@@ -20,6 +20,8 @@ static FT_Library ft;
 static FT_Face face;
 static int point_size = 16;
 
+GdkDevice *mouse = NULL;
+
 cairo_surface_t* surface = NULL;
 cairo_surface_t* atlas_surface = NULL;
 cairo_surface_t* bg = NULL;
@@ -243,22 +245,24 @@ static void update()
         sprite_slab[i].update(&sprite_slab[i]);
     }
 
-    //{
-        //int x, y;
-        //SDL_GetMouseState(&x, &y);
-        //int w = screen_w, h = screen_h;
-        //if (x < 50) {
-            //bg_x = MAX(bg_x-2, 0);
-        //} else if (x > w-50) {
-            //bg_x = MIN(bg_x+2, bg->w - w);
-        //}
+    {
+        int x, y;
+        gdk_device_get_position(mouse, NULL, &x, &y);
+        int bg_w = cairo_image_surface_get_width(bg), bg_h = cairo_image_surface_get_height(bg);
 
-        //if (y < 50) {
-            //bg_y = MAX(bg_y-2, 0);
-        //} else if (y > h-50) {
-            //bg_y = MIN(bg_y+2, bg->h - h);
-        //}
-    //}
+        int w = screen_w, h = screen_h;
+        if (x < 100) {
+            bg_x = MAX(bg_x-2, 0);
+        } else if (x > w-50) {
+            bg_x = min(bg_x+2, bg_w - w);
+        }
+
+        if (y < 100) {
+            bg_y = max(bg_y-2, 0);
+        } else if (y > h-50) {
+            bg_y = min(bg_y+2, bg_h - h);
+        }
+    }
 }
 
 static void spawn_sprites(int n)
@@ -268,6 +272,29 @@ static void spawn_sprites(int n)
     }
 
     std::cerr << "spawn sprites done" << sprite_sp << std::endl;
+}
+
+static gboolean drag = FALSE;
+static double mouse_x = 0, mouse_y = 0;
+static gboolean on_button_press(GtkWidget* widget, GdkEvent* ev, gpointer data)
+{
+    drag = TRUE;
+    mouse_x = ev->button.x, mouse_y = ev->button.y;
+    return FALSE;
+}
+
+static gboolean on_button_release(GtkWidget* widget, GdkEvent* ev, gpointer data)
+{
+    drag = FALSE;
+    return FALSE;
+}
+
+static gboolean on_mouse_motion(GtkWidget* widget, GdkEvent* ev, gpointer data)
+{
+    if (drag) {
+        
+    }
+    return FALSE;
 }
 
 static gboolean on_configure(GtkWidget* widget, GdkEvent* ev, gpointer data)
@@ -365,6 +392,22 @@ int main(int argc, char *argv[])
     init_ft();
     load_background();
 
+    GdkDevice *device;
+    GdkDeviceManager* dev_manager = gdk_display_get_device_manager(
+            gtk_widget_get_display(top));
+    GList* pointers = gdk_device_manager_list_devices(dev_manager,
+            GDK_DEVICE_TYPE_MASTER);
+    if (pointers) {
+        device = (GdkDevice*)pointers->data;
+        g_list_free(pointers);
+    }
+
+    if (gdk_device_get_source(device) == GDK_SOURCE_KEYBOARD) {
+        mouse = gdk_device_get_associated_device(device);
+    } else {
+        mouse = device;
+    }
+
     memset(sprite_slab, 0, sizeof sprite_slab);
     memset(label_slab, 0, sizeof label_slab);
     spawn_sprites(NSPAWN);
@@ -375,6 +418,7 @@ int main(int argc, char *argv[])
             "signal::key-press-event", on_key_press, NULL,
             "signal::destroy", gtk_main_quit, NULL,
             "signal::configure-event", on_configure, NULL,
+            "signal::motion-notify-event", on_mouse_motion, NULL,
             NULL);
 
     gtk_container_add(GTK_CONTAINER(top), window);
