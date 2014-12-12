@@ -320,9 +320,13 @@ static gboolean on_key_press(GtkWidget* widget, GdkEvent* ev, gpointer data)
 
 static gboolean on_timeout(gpointer data)
 {
+    unsigned int cur = get_ticks();
     update();
     gtk_widget_queue_draw(window);
-    return G_SOURCE_CONTINUE;
+    auto ellapsed = get_ticks() - cur;
+    g_timeout_add(500-ellapsed, on_timeout, NULL);
+    cerr << "ellapsed: " << ellapsed << endl;
+    return G_SOURCE_REMOVE;
 }
 
 static gboolean draw_callback(GtkWidget *widget, cairo_t *cr, gpointer data)
@@ -437,7 +441,6 @@ int main(int argc, char *argv[])
     gtk_widget_show_all(top);
 
     gdk_window_set_events(gtk_widget_get_window(window), GDK_ALL_EVENTS_MASK);
-    get_ticks();
     g_timeout_add(500, on_timeout, NULL);
 
     gtk_main();
