@@ -21,6 +21,7 @@ static FT_Face face;
 static int point_size = 16;
 
 cairo_surface_t* surface = NULL;
+cairo_surface_t* atlas_surface = NULL;
 cairo_surface_t* bg = NULL;
 GtkWidget* window = NULL;
 
@@ -116,7 +117,7 @@ static void sprite_draw(Sprite* s, cairo_t* cr)
         rects[i].w = rects[i].h = 10;
         rects[i].x = x[i].x + (x[i].w - 10)/2;
         rects[i].y = x[i].y + (x[i].h - 10)/2;
-        cairo_set_source_rgba(cr, 0x22, 0x22, 0x22, 0x20);
+        cairo_set_source_rgba(cr, 0xe2, 0x22, 0x22, 0x80);
         cairo_rectangle(cr, rects[i].x, rects[i].y, rects[i].w, rects[i].h);
         cairo_fill(cr);
     }
@@ -166,8 +167,6 @@ static void load_text(Sprite* s, const char* text)
     int x = 0, y = atlas_h;
     s->label_surface = cairo_image_surface_create(CAIRO_FORMAT_ARGB32, 
             atlas_w, atlas_h);
-    //cerr << __func__ << " " << cairo_image_surface_get_width(s->label_surface) 
-        //<< ", " << cairo_image_surface_get_height(s->label_surface) << endl;
 
     cairo_t* cr = cairo_create(s->label_surface);
 
@@ -192,10 +191,10 @@ static void load_text(Sprite* s, const char* text)
             cerr << "create glyph surface failed: " << cairo_status_to_string(cairo_surface_status(surf)) << endl;
         }
         cairo_set_source_surface(cr, surf, x + slot->bitmap_left, y - slot->bitmap_top );
-        cairo_paint(cr);
-        //cairo_set_operator(cr, CAIRO_OPERATOR_SOURCE);
-        //cairo_rectangle(cr, x + slot->bitmap_left, y - slot->bitmap_top, bm.width, bm.rows);
-        //cairo_fill(cr);
+        //cairo_paint(cr);
+        cairo_set_operator(cr, CAIRO_OPERATOR_SOURCE);
+        cairo_rectangle(cr, x + slot->bitmap_left, y - slot->bitmap_top, bm.width, bm.rows);
+        cairo_fill(cr);
 
         cairo_surface_destroy(surf);
         delete buf;
@@ -380,6 +379,8 @@ int main(int argc, char *argv[])
 
     gtk_container_add(GTK_CONTAINER(top), window);
     
+    gtk_widget_set_app_paintable(top, TRUE);
+    gtk_widget_set_app_paintable(window, TRUE);
     gtk_widget_set_can_focus(window, TRUE);
     gtk_window_maximize(GTK_WINDOW(top));
     gtk_widget_show_all(top);
