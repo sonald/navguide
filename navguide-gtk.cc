@@ -72,6 +72,9 @@ typedef struct {
     int w, h;
 } Rect;
 
+static const int TEX_LEN = 200 * 15 * 4;
+//static unsigned char tex_slab[NSPAWN*TEX_LEN]; // large enough for all surfaces
+
 struct _Sprite {
     Rect bound; /// x,y used as postion, w,h used ad bound
     char* label;
@@ -80,6 +83,7 @@ struct _Sprite {
     DIRECTION dir;
     cairo_surface_t* surface;
     cairo_surface_t* label_surface;
+    unsigned char tex_slab[TEX_LEN]; // buffer for label_surface
 
     void (*draw)(Sprite*, cairo_t*);
     void (*update)(Sprite*);
@@ -151,9 +155,6 @@ static void sprite_update(Sprite* s)
     s->bound.y = min(max(s->bound.y, 0), screen_h);
 }
 
-static const int TEX_LEN = 200 * 15 * 4;
-static unsigned char tex_slab[NSPAWN*TEX_LEN]; // large enough for all surfaces
-
 static void load_text(Sprite* s, const char* text)
 {
     int atlas_w = 0, atlas_h = 0;
@@ -170,7 +171,7 @@ static void load_text(Sprite* s, const char* text)
     }
 
     int x = 0, y = atlas_h;
-    unsigned char* label_buf = &tex_slab[TEX_LEN*sprite_sp];
+    unsigned char* label_buf = &s->tex_slab[0];
     s->label_surface = cairo_image_surface_create_for_data(label_buf,
             CAIRO_FORMAT_ARGB32, atlas_w, atlas_h, atlas_w * 4);
     //cerr << __func__ << "atlas " << atlas_w << "," << atlas_h << endl;
@@ -250,24 +251,6 @@ static void update()
         sprite_slab[i].update(&sprite_slab[i]);
     }
 
-    {
-        int step = 10;
-        int x, y;
-        gdk_device_get_position(mouse, NULL, &x, &y);
-
-        int w = screen_w, h = screen_h;
-        if (x < 100) {
-            bg_x = max(bg_x-step, 0);
-        } else if (x > w-100) {
-            bg_x = min(bg_x+step, bg_w - w);
-        }
-
-        if (y < 100) {
-            bg_y = max(bg_y-step, 0);
-        } else if (y > h-100) {
-            bg_y = min(bg_y+step, bg_h - h);
-        }
-    }
 }
 
 static void spawn_sprites(int n)
@@ -321,6 +304,25 @@ static gboolean on_key_press(GtkWidget* widget, GdkEvent* ev, gpointer data)
 static gboolean on_timeout(gpointer data)
 {
     unsigned int cur = get_ticks();
+    // this slow on Loongson, why?
+    {
+        int step = 10;
+        int x, y;
+        gdk_device_get_position(mouse, NULL, &x, &y);
+
+        int w = screen_w, h = screen_h;
+        if (x < 100) {
+            bg_x = max(bg_x-step, 0);
+        } else if (x > w-100) {
+            bg_x = min(bg_x+step, bg_w - w);
+        }
+
+        if (y < 100) {
+            bg_y = max(bg_y-step, 0);
+        } else if (y > h-100) {
+            bg_y = min(bg_y+step, bg_h - h);
+        }
+    }
     update();
     gtk_widget_queue_draw(window);
     auto ellapsed = get_ticks() - cur;
@@ -420,7 +422,6 @@ int main(int argc, char *argv[])
 
     memset(sprite_slab, 0, sizeof sprite_slab);
     memset(label_slab, 0, sizeof label_slab);
-    //memset(tex_slab, 0, sizeof tex_slab);
     spawn_sprites(NSPAWN);
     
     window = gtk_drawing_area_new();
